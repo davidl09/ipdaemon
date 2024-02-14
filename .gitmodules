@@ -1,0 +1,6 @@
+[submodule "mailclient-cpp"]
+	path = mailclient-cpp
+	url = https://github.com/embeddedmz/mailclient-cpp.git
+[submodule "curlpp"]
+	path = curlpp
+	url = https://github.com/jpbarrette/curlpp.git
