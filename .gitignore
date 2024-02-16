@@ -1,3 +1,2 @@
-cmake-build-debug-rpi/
-cmake-build-release-rpi/
-build/
+**/*build*/
+bin/
