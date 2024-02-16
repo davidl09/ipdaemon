@@ -20,6 +20,7 @@ target_link_libraries(
         curl
         curlpp
         mailclient
+        pthread
 )
 
 target_include_directories(

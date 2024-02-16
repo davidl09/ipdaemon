@@ -18,5 +18,10 @@ int main(int argc, char* argv[]) {
     }
     std::cout << "Monitoring IP address changes every " << interval << std::endl;
     IPServer server{"ipcheck-conf.json"};
-    server.run(interval);
+    try {
+        server.run(interval);
+    }
+    catch (std::exception& e) {
+        server.notifyError("An error has occured: " + std::string{e.what()});
+    }
 }

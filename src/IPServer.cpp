@@ -9,18 +9,32 @@ IPServer::IPServer(std::string configFile)
     ip = getIP();
 }
 
+IPServer::~IPServer() {
+
+}
+
+
 void IPServer::run(const chrono::seconds interval) {
     while (true) {
-        if (not configFileExists()) {
-            handleConfigFileError("Could not open config file, was it deleted?");
-        }
-        if (configFileChanged()) {
-            readConfig();
-        }
-        if (updateIP()) {
-            sendIp();
-        }
+        runOnce();
         std::this_thread::sleep_for(interval);
+    }
+}
+
+void IPServer::notifyError(const std::string& errMessage) const {
+    sendToSource(errMessage);
+}
+
+
+void IPServer::runOnce() {
+    if (not configFileExists()) {
+        handleConfigFileError("Could not open config file, was it deleted?");
+    }
+    if (configFileChanged()) {
+        readConfig();
+    }
+    if (updateIP()) {
+        sendIp();
     }
 }
 
@@ -63,12 +77,37 @@ bool IPServer::updateIP() {
 }
 
 void IPServer::sendIp() const {
+    sendToRecipient("Subject: " + getPcName() + "\n\n Updated IP address " + ip);
+}
+
+void IPServer::sendToRecipient(const std::string& message) const {
     try {
-        CSMTPClient client{[](const std::string& str){std::clog << str << std::endl;}};
+        CSMTPClient client{[](const std::string& str) {
+#ifndef NDEBUG
+            std::clog << str << std::endl;
+#endif
+        }};
         client.InitSession(data["smtpServer"], "dalaeer@gmail.com", data["gmailAppPassWord"],
             CMailClient::SettingsFlag::ALL_FLAGS, CMailClient::SslTlsFlag::ENABLE_TLS);
 
-        client.SendString(data["mailFrom"], data["mailTo"], "", getPcName() + " now has IP address " + ip);
+        client.SendString(data["mailFrom"], data["mailTo"], "", message);
+    } catch (std::exception& e) {
+        std::cerr << "Exception: " << e.what() << std::endl;
+        throw;
+    }
+}
+
+void IPServer::sendToSource(const std::string& errMessage) const {
+    try {
+        CSMTPClient client{[](const std::string& str) {
+#ifndef NDEBUG
+            std::clog << str << std::endl;
+#endif
+        }};
+        client.InitSession(data["smtpServer"], "dalaeer@gmail.com", data["gmailAppPassWord"],
+            CMailClient::SettingsFlag::ALL_FLAGS, CMailClient::SslTlsFlag::ENABLE_TLS);
+
+        client.SendString(data["mailFrom"], data["mailFrom"], "", errMessage);
     } catch (std::exception& e) {
         std::cerr << "Exception: " << e.what() << std::endl;
         throw;
@@ -116,3 +155,36 @@ std::string IPServer::getPcName() {
 
     return buffer;
 }
+
+AsyncIPServer::AsyncIPServer(const std::string& configFile)
+    : IPServer(configFile), running(false) {
+
+}
+
+void AsyncIPServer::run(chrono::seconds interval) {
+    if (running) return; //do not start more than one thread
+    running = true;
+    auto task = [this, interval]() {
+        while (running) {
+            runOnce();
+            std::this_thread::sleep_for(interval);
+        }
+    };
+
+    std::thread(task).detach();
+}
+
+void AsyncIPServer::stop() {
+#ifndef NDEBUG
+    std::clog << "Stopping" << std::endl;
+#endif
+    running = false;
+}
+
+AsyncIPServer::~AsyncIPServer() {
+
+}
+
+
+
+

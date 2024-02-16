@@ -5,6 +5,7 @@
 #include <thread>
 #include <sstream>
 #include <chrono>
+#include <condition_variable>
 #include <SMTPClient.h>
 #include <curlpp/cURLpp.hpp>
 #include <curlpp/Easy.hpp>
@@ -21,9 +22,15 @@ class IPServer {
 public:
     explicit IPServer(std::string configFile);
 
-    void run(const chrono::seconds interval);
+    virtual void run(chrono::seconds interval);
 
-private:
+    void notifyError(const std::string& errMessage) const;
+
+    virtual ~IPServer();
+
+protected:
+    void runOnce();
+
     [[nodiscard]] bool configFileChanged() const;
 
     [[nodiscard]] bool configFileExists() const;
@@ -36,6 +43,10 @@ private:
 
     void sendIp() const;
 
+    void sendToRecipient(const std::string& message) const;
+
+    void sendToSource(const std::string& errMessage) const;
+
     std::string getIP();
 
     static std::string getPcName();
@@ -43,6 +54,20 @@ private:
     std::string configFile;
     nlo::json data;
     std::string ip;
+};
+
+class AsyncIPServer final : public IPServer {
+public:
+    explicit AsyncIPServer(const std::string& configFile);
+
+    virtual ~AsyncIPServer();
+
+    void run(chrono::seconds interval);
+
+    void stop();
+
+private:
+    std::atomic_bool running;
 };
 
 #endif // IPSERVER_HPP
