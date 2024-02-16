@@ -17,7 +17,7 @@ int main(int argc, char* argv[]) {
         if (temp) interval = chrono::seconds(temp);
     }
     std::cout << "Monitoring IP address changes every " << interval << std::endl;
-    IPServer server{"ipcheck-conf.json"};
+    IPServer server{"ipcheck-conf.json", true};
     try {
         server.run(interval);
     }

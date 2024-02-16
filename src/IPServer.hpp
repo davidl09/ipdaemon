@@ -18,20 +18,23 @@ namespace nlo = nlohmann;
 namespace fs = std::filesystem;
 namespace ranges = std::ranges;
 
+template <typename Streamable>
+    concept Stremable = requires(std::ostream& ostream, Streamable S) {ostream << S;};
+
 class IPServer {
 public:
-    explicit IPServer(std::string configFile);
+    explicit IPServer(const std::string& configFile, bool logging = true);
 
     virtual void run(chrono::seconds interval);
 
-    void notifyError(const std::string& errMessage) const;
+    void notifyError(const std::string& errMessage);
 
     virtual ~IPServer();
 
 protected:
     void runOnce();
 
-    [[nodiscard]] bool configFileChanged() const;
+    [[nodiscard]] bool configFileChanged();
 
     [[nodiscard]] bool configFileExists() const;
 
@@ -41,19 +44,45 @@ protected:
 
     bool updateIP();
 
-    void sendIp() const;
+    void sendIp();
 
-    void sendToRecipient(const std::string& message) const;
+    void sendToRecipient(const std::string& message);
 
-    void sendToSource(const std::string& errMessage) const;
+    void sendToSource(const std::string& errMessage);
 
     std::string getIP();
 
     static std::string getPcName();
 
-    std::string configFile;
+    static void makeHiddenDir();
+
+    std::ofstream openLogFile();
+
+    template <class Streamable>
+    friend std::ostream& operator<<(IPServer& server, Streamable output) {
+
+        auto getTime = []() -> std::string {
+            const time_t now = chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+            const std::tm* time_info = std::localtime(&now);
+            char time_buf[256];
+            std::strftime(time_buf, sizeof(time_buf), "%Y-%m-%d %H:%M:%S", time_info);
+            return {time_buf, time_buf + sizeof(time_buf)};
+        };
+
+        if (server.logger && server.log) {
+
+            server.logger << "[" << getTime() + "]\t\t";
+            server.logger << output << std::endl;
+        }
+        return server.logger;
+    }
+
+    const fs::path configDir;
+    const fs::path configFile;
     nlo::json data;
     std::string ip;
+    std::ofstream logger;
+    bool log;
 };
 
 class AsyncIPServer final : public IPServer {

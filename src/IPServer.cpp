@@ -1,18 +1,16 @@
 #include "IPServer.hpp"
 
-#include <utility>
-
-IPServer::IPServer(std::string configFile)
-    : configFile(std::move(configFile))
-{
+IPServer::IPServer(const std::string& configFile = "ipcheck-conf.json", bool logging)
+    : configDir(fs::path(getenv("HOME")) / ".ipcheck"), configFile(configDir / configFile), log(logging) {
+    makeHiddenDir();
     readConfig();
     ip = getIP();
+    if (log) {
+        openLogFile();
+    }
 }
 
-IPServer::~IPServer() {
-
-}
-
+IPServer::~IPServer() = default;
 
 void IPServer::run(const chrono::seconds interval) {
     while (true) {
@@ -21,7 +19,7 @@ void IPServer::run(const chrono::seconds interval) {
     }
 }
 
-void IPServer::notifyError(const std::string& errMessage) const {
+void IPServer::notifyError(const std::string& errMessage) {
     sendToSource(errMessage);
 }
 
@@ -38,12 +36,12 @@ void IPServer::runOnce() {
     }
 }
 
-[[nodiscard]] bool IPServer::configFileChanged() const {
+[[nodiscard]] bool IPServer::configFileChanged() {
     nlo::json temp;
     std::fstream(configFile) >> temp;
-#ifndef NDEBUG
-    std::clog << "Read updated json: " << temp << '\n';
-#endif
+
+    *this << "Read updated json: " << temp << '\n';
+
     return temp != data;
 }
 
@@ -56,60 +54,55 @@ void IPServer::handleConfigFileError(const std::string& message) {
 }
 
 void IPServer::readConfig() {
-    if (not configFileExists()) handleConfigFileError("Aborting, config file '" + configFile + "' could not be found");
+    if (not configFileExists())
+        handleConfigFileError(
+            "Aborting: config file '" + configFile.string() + "' could not be found. Please place the config file into '" + configDir.string() + "/.ipcheck/', then restart ipcheck."
+            );
     std::fstream(configFile) >> data;
-#ifndef NDEBUG
-    std::clog << "Read from ipcheck-conf.json: " << data << '\n';
-#endif
+
+    *this << "Read from " + configFile.string() + ": " << data << '\n';
+
     static constexpr std::array requiredKeys = {"gmailAppPassWord", "mailTo", "mailFrom", "ipApi", "smtpServer"};
     ranges::for_each(requiredKeys, [this](const auto& key) {
-        if (not data.contains(key)) throw std::invalid_argument("Error reading '" + configFile + "': missing '" + key + "'");
+        if (not data.contains(key)) throw std::invalid_argument("Error reading '" + configFile.string() + "': missing '" + key + "'");
     });
 }
 
 bool IPServer::updateIP() {
-    const auto temp = getIP();
-    if (temp != ip) {
+    if (const auto temp = getIP(); temp != ip) {
         ip = temp;
         return true;
     }
     return false;
 }
 
-void IPServer::sendIp() const {
+void IPServer::sendIp() {
     sendToRecipient("Subject: " + getPcName() + "\n\n Updated IP address " + ip);
 }
 
-void IPServer::sendToRecipient(const std::string& message) const {
+void IPServer::sendToRecipient(const std::string& message) {
     try {
-        CSMTPClient client{[](const std::string& str) {
-#ifndef NDEBUG
-            std::clog << str << std::endl;
-#endif
-        }};
+        CSMTPClient client{[](const std::string& str) {}};
         client.InitSession(data["smtpServer"], "dalaeer@gmail.com", data["gmailAppPassWord"],
             CMailClient::SettingsFlag::ALL_FLAGS, CMailClient::SslTlsFlag::ENABLE_TLS);
 
         client.SendString(data["mailFrom"], data["mailTo"], "", message);
     } catch (std::exception& e) {
-        std::cerr << "Exception: " << e.what() << std::endl;
+        *this << "Exception: " << e.what() << std::endl;
         throw;
     }
 }
 
-void IPServer::sendToSource(const std::string& errMessage) const {
+void IPServer::sendToSource(const std::string& errMessage) {
     try {
         CSMTPClient client{[](const std::string& str) {
-#ifndef NDEBUG
-            std::clog << str << std::endl;
-#endif
         }};
         client.InitSession(data["smtpServer"], "dalaeer@gmail.com", data["gmailAppPassWord"],
             CMailClient::SettingsFlag::ALL_FLAGS, CMailClient::SslTlsFlag::ENABLE_TLS);
 
         client.SendString(data["mailFrom"], data["mailFrom"], "", errMessage);
     } catch (std::exception& e) {
-        std::cerr << "Exception: " << e.what() << std::endl;
+        *this << "Exception: " << e.what() << std::endl;
         throw;
     }
 }
@@ -128,19 +121,17 @@ std::string IPServer::getIP() {
             {std::copy_n(str, size * nmemb, std::back_inserter(ss)); return ss.length();}
             );
         myRequest.perform();
-#ifndef NDEBUG
-        std::cout << ss << '\n';
-#endif
+        *this << ss << '\n';
         return ss;
     }
     catch(curlpp::RuntimeError & e)
     {
-        std::cerr << e.what() << std::endl;
+        *this << e.what() << std::endl;
         throw;
     }
     catch(curlpp::LogicError & e)
     {
-        std::cerr << e.what() << std::endl;
+        *this << e.what() << std::endl;
         throw;
     }
 }
@@ -156,9 +147,17 @@ std::string IPServer::getPcName() {
     return buffer;
 }
 
+void IPServer::makeHiddenDir() {
+    fs::create_directory(fs::path(getenv("HOME")) / ".ipcheck");
+}
+
+std::ofstream IPServer::openLogFile() {
+    return std::ofstream{configDir / "logs.txt", std::ios::out};
+
+}
+
 AsyncIPServer::AsyncIPServer(const std::string& configFile)
     : IPServer(configFile), running(false) {
-
 }
 
 void AsyncIPServer::run(chrono::seconds interval) {
@@ -175,15 +174,11 @@ void AsyncIPServer::run(chrono::seconds interval) {
 }
 
 void AsyncIPServer::stop() {
-#ifndef NDEBUG
-    std::clog << "Stopping" << std::endl;
-#endif
+    *this << "Stopping" << std::endl;
     running = false;
 }
 
-AsyncIPServer::~AsyncIPServer() {
-
-}
+AsyncIPServer::~AsyncIPServer() = default;
 
 
 
