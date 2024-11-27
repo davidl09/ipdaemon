@@ -1,12 +1,29 @@
 cmake_minimum_required(VERSION 3.25)
 
-#set(CMAKE_TOOLCHAIN_FILE "/opt/x-tools-armv6-rpi-linux-gnueabihf/x-tools/armv6-rpi-linux-gnueabihf/armv6-rpi-linux-gnueabihf.toolchain.cmake")
-
 project(ipcheck)
 
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin")
+
+include(FetchContent)
+
+find_package(nlohmann_json QUIET)
+if(NOT nlohmann_json_FOUND)
+    FetchContent_Declare(
+        json
+        GIT_REPOSITORY https://github.com/nlohmann/json.git
+        GIT_TAG v3.11.2
+    )
+    FetchContent_MakeAvailable(json)
+endif()
+
+FetchContent_Declare(
+    curlpp
+    GIT_REPOSITORY https://github.com/jpbarrette/curlpp
+    GIT_TAG master
+)
+FetchContent_MakeAvailable(curlpp)
 
 add_subdirectory(mailclient-cpp)
 
@@ -19,6 +36,7 @@ target_link_libraries(
         ipcheck PUBLIC
         curl
         curlpp
+        nlohmann_json::nlohmann_json
         mailclient
         pthread
 )

@@ -1,6 +1,7 @@
 #include "IPServer.hpp"
+#include <unistd.h>
 
-IPServer::IPServer(const std::string& configFile = "ipcheck-conf.json", bool logging)
+IPServer::IPServer(const std::string& configFile, bool logging)
     : configDir(fs::path(getenv("HOME")) / ".ipcheck"), configFile(configDir / configFile), log(logging) {
     makeHiddenDir();
     readConfig();
@@ -10,21 +11,23 @@ IPServer::IPServer(const std::string& configFile = "ipcheck-conf.json", bool log
     }
 }
 
-IPServer::~IPServer() = default;
-
 void IPServer::run(const chrono::seconds interval) {
     while (true) {
-        runOnce();
+        try {
+            runOnce();
+        } catch (const std::exception& e) {
+            notifyError(e.what());
+            break;
+        }
         std::this_thread::sleep_for(interval);
     }
 }
 
-void IPServer::notifyError(const std::string& errMessage) {
-    sendToSource(errMessage);
-}
-
-
 void IPServer::runOnce() {
+    if (const char* home = getenv("HOME"); !home) {
+        throw std::runtime_error("HOME environment variable not set");
+    }
+    
     if (not configFileExists()) {
         handleConfigFileError("Could not open config file, was it deleted?");
     }
@@ -37,12 +40,20 @@ void IPServer::runOnce() {
 }
 
 [[nodiscard]] bool IPServer::configFileChanged() {
-    nlo::json temp;
-    std::fstream(configFile) >> temp;
-
-    *this << "Read updated json: " << temp << '\n';
-
-    return temp != data;
+    try {
+        nlo::json temp;
+        std::ifstream config(configFile);
+        if (!config.is_open()) {
+            throw std::runtime_error("Failed to open config file for reading");
+        }
+        config >> temp;
+        
+        *this << "Read updated json: " << temp << '\n';
+        
+        return temp != data;
+    } catch (const nlo::json::exception& e) {
+        throw std::runtime_error(std::string("JSON parsing error: ") + e.what());
+    }
 }
 
 bool IPServer::configFileExists() const {
@@ -50,6 +61,7 @@ bool IPServer::configFileExists() const {
 }
 
 void IPServer::handleConfigFileError(const std::string& message) {
+
     throw std::invalid_argument(message);
 }
 
@@ -105,6 +117,11 @@ void IPServer::sendToSource(const std::string& errMessage) {
         *this << "Exception: " << e.what() << std::endl;
         throw;
     }
+}
+
+void IPServer::notifyError(const std::string& errMessage) {
+    *this << "Error: " << errMessage << '\n';
+    sendToSource(errMessage);
 }
 
 std::string IPServer::getIP() {
@@ -165,7 +182,13 @@ void AsyncIPServer::run(chrono::seconds interval) {
     running = true;
     auto task = [this, interval]() {
         while (running) {
-            runOnce();
+            try {
+                runOnce();
+            } catch (const std::exception& e) {
+                notifyError(e.what());
+                running = false;
+                break;
+            }
             std::this_thread::sleep_for(interval);
         }
     };
@@ -179,7 +202,3 @@ void AsyncIPServer::stop() {
 }
 
 AsyncIPServer::~AsyncIPServer() = default;
-
-
-
-

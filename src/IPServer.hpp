@@ -6,6 +6,8 @@
 #include <sstream>
 #include <chrono>
 #include <condition_variable>
+#include <filesystem>
+#include <atomic>
 #include <SMTPClient.h>
 #include <curlpp/cURLpp.hpp>
 #include <curlpp/Easy.hpp>
@@ -18,48 +20,33 @@ namespace nlo = nlohmann;
 namespace fs = std::filesystem;
 namespace ranges = std::ranges;
 
-template <typename Streamable>
-    concept Stremable = requires(std::ostream& ostream, Streamable S) {ostream << S;};
+template <typename T>
+concept Streamable = requires(std::ostream& ostream, T S) {ostream << S;};
 
 class IPServer {
 public:
-    explicit IPServer(const std::string& configFile, bool logging = true);
-
+    explicit IPServer(const std::string& configFile = "ipcheck-conf.json", bool logging = true);
+    virtual ~IPServer() = default;
+    
     virtual void run(chrono::seconds interval);
-
     void notifyError(const std::string& errMessage);
-
-    virtual ~IPServer();
 
 protected:
     void runOnce();
-
     [[nodiscard]] bool configFileChanged();
-
     [[nodiscard]] bool configFileExists() const;
-
     static void handleConfigFileError(const std::string& message) ;
-
     void readConfig();
-
     bool updateIP();
-
     void sendIp();
-
     void sendToRecipient(const std::string& message);
-
     void sendToSource(const std::string& errMessage);
-
     std::string getIP();
-
     static std::string getPcName();
-
     static void makeHiddenDir();
-
     std::ofstream openLogFile();
 
-    template <class Streamable>
-    friend std::ostream& operator<<(IPServer& server, Streamable output) {
+    friend std::ostream& operator<<(IPServer& server, Streamable auto output) {
 
         auto getTime = []() -> std::string {
             const time_t now = chrono::system_clock::to_time_t(std::chrono::system_clock::now());
@@ -88,15 +75,11 @@ protected:
 class AsyncIPServer final : public IPServer {
 public:
     explicit AsyncIPServer(const std::string& configFile);
-
     virtual ~AsyncIPServer();
-
     void run(chrono::seconds interval);
-
     void stop();
-
 private:
-    std::atomic_bool running;
+    std::atomic<bool> running;
 };
 
 #endif // IPSERVER_HPP
