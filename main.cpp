@@ -1,4 +1,4 @@
-#include "src/IPServer.hpp"
+#include "IPServer.hpp"
 
 int main(int argc, char* argv[]) {
     curlpp::initialize();

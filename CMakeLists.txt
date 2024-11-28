@@ -26,23 +26,17 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(curlpp)
 
 add_subdirectory(mailclient-cpp)
+add_subdirectory(src)
 
 add_executable(ipcheck
         main.cpp
-        src/IPServer.cpp
 )
 
 target_link_libraries(
-        ipcheck PUBLIC
-        curl
-        curlpp
-        nlohmann_json::nlohmann_json
-        mailclient
-        pthread
+        ipcheck PRIVATE
+        ipcheck-lib
 )
 
-target_include_directories(
-        ipcheck PUBLIC
-        "${CMAKE_CURRENT_SOURCE_DIR}/mailclient-cpp/MAIL"
-        "${CMAKE_CURRENT_SOURCE_DIR}/curlpp/include/curlpp"
-)
+# Install configuration
+install(TARGETS ipcheck
+        RUNTIME DESTINATION bin)
