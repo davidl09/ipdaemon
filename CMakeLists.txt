@@ -26,6 +26,7 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(curlpp)
 
 add_subdirectory(mailclient-cpp)
+set(MAILCLIENT_INCLUDES ${CMAKE_CURRENT_SOURCE_DIR}/mailclient-cpp/MAIL CACHE PATH "")
 add_subdirectory(src)
 
 add_executable(ipcheck
